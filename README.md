@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS public.settings (
     is_ai_enabled BOOLEAN DEFAULT true,
     active_ai TEXT DEFAULT 'gpt',
     gpt_api_key TEXT,
-    gpt_model_name TEXT DEFAULT 'gpt-4o',
+    gpt_model_name TEXT DEFAULT 'gpt-4.1-mini',
     gpt_temperature FLOAT DEFAULT 0.7,
     gpt_max_tokens INTEGER DEFAULT 500,
     gpt_reasoning_effort TEXT DEFAULT 'none',
