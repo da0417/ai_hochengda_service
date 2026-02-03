@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS public.chat_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     line_user_id TEXT NOT NULL,
+    webhook_event_id TEXT UNIQUE, -- 用於去重
     user_name TEXT,
     message TEXT NOT NULL,
     sender TEXT NOT NULL, -- 'user' or 'ai'

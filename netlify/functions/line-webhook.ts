@@ -45,10 +45,24 @@ export const handler: Handler = async (event) => {
     if (lineEvent.type === 'message' && lineEvent.message.type === 'text') {
       const userId = lineEvent.source.userId!;
       const userMessage = lineEvent.message.text;
+      const eventId = (lineEvent as any).webhookEventId; // 取得 LINE 事件唯一 ID
+
+      // 檢查是否已經處理過這則訊息
+      const { data: existingLog } = await supabase
+        .from('chat_logs')
+        .select('id')
+        .eq('webhook_event_id', eventId)
+        .single();
+
+      if (existingLog) {
+        console.log('Duplicate event ignored:', eventId);
+        continue;
+      }
 
       // Log user message
       await supabase.from('chat_logs').insert({
         line_user_id: userId,
+        webhook_event_id: eventId,
         message: userMessage,
         sender: 'user',
       });
