@@ -39,7 +39,16 @@ export const handler: Handler = async (event) => {
       const handoverKeywords = settings.handover_keywords.split(',').map((k: string) => k.trim());
       const isKeywordHit = handoverKeywords.some((k: string) => userMessage.includes(k));
 
-      if (isKeywordHit) {
+      // 冷卻機制：如果 3 分鐘內才剛手動重設過，則忽略關鍵字偵測
+      let isCooldown = false;
+      if (userState?.last_ai_reset_at) {
+        const lastReset = new Date(userState.last_ai_reset_at).getTime();
+        if (new Date().getTime() - lastReset < 3 * 60 * 1000) {
+          isCooldown = true;
+        }
+      }
+
+      if (isKeywordHit && !isCooldown) {
         let nickname = '匿名用戶';
         try { const p = await lineClient.getProfile(userId); nickname = p.displayName; } catch (e) {}
         await supabase.from('user_states').upsert({ line_user_id: userId, nickname, is_human_mode: true, last_human_interaction: new Date().toISOString() });

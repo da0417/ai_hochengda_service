@@ -26,11 +26,14 @@ export default function AgentService() {
   const switchToAI = async (userId: string) => {
     const { error } = await supabase
       .from('user_states')
-      .update({ is_human_mode: false })
+      .update({ 
+        is_human_mode: false,
+        last_ai_reset_at: new Date().toISOString() 
+      })
       .eq('line_user_id', userId);
 
     if (!error) {
-      alert('已成功切換回 AI 客服');
+      alert('已成功切換回 AI 客服，系統將在接下來 3 分鐘內忽略該用戶的轉接關鍵字。');
       fetchHandoverUsers();
     }
   };

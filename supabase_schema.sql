@@ -31,7 +31,8 @@ CREATE TABLE IF NOT EXISTS public.user_states (
     line_user_id TEXT PRIMARY KEY,
     nickname TEXT,
     is_human_mode BOOLEAN DEFAULT false,
-    last_human_interaction TIMESTAMP WITH TIME ZONE
+    last_human_interaction TIMESTAMP WITH TIME ZONE,
+    last_ai_reset_at TIMESTAMP WITH TIME ZONE -- 新增：記錄手動重設時間
 );
 
 -- 3. 啟用 RLS
