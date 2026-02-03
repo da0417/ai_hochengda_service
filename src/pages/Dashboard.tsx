@@ -278,7 +278,10 @@ export default function Dashboard() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">參考檔案上傳 (支援 PDF, TXT)</label>
-            <div className="relative border-2 border-dashed border-gray-300 rounded-lg p-6 flex flex-col items-center justify-center text-gray-500 hover:border-blue-400 hover:bg-blue-50 transition-all cursor-pointer">
+            <div 
+              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+              className="relative border-2 border-dashed border-gray-300 rounded-lg p-6 flex flex-col items-center justify-center text-gray-500 hover:border-blue-400 hover:bg-blue-50 transition-all cursor-pointer"
+            >
               <input
                 type="file"
                 accept=".pdf,.txt"
@@ -286,13 +289,13 @@ export default function Dashboard() {
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
               />
               <RefreshCcw className="w-8 h-8 mb-2" />
-              <p>{settings.reference_file_url ? '檔案已上傳 (點擊更換)' : '拖曳檔案至此或點擊上傳'}</p>
+              <p>{settings.reference_file_url ? '檔案已上傳 (點擊或拖曳更換)' : '拖曳檔案至此或點擊上傳'}</p>
               {settings.reference_file_url && (
                 <p className="text-xs text-blue-600 mt-2 break-all">{settings.reference_file_url}</p>
               )}
             </div>
             <p className="text-xs text-gray-400 mt-2">
-              ※ 若上傳失敗，請確認 Supabase Storage 已建立名為 "knowledge_base" 的 Public Bucket，並在 Policies 設定允許公開讀取與寫入。
+              ※ 重要：請至 Supabase SQL Editor 執行 RLS 政策指令，否則上傳會被拒絕。
             </p>
           </div>
         </div>
