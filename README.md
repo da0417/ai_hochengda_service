@@ -1,50 +1,48 @@
 # AI 客服系統 (LINE + Supabase + React)
 
-這是一個完整的 AI 客服系統，支援 OpenAI GPT 與 Google Gemini，並與 LINE 串接。
+這是一個企業級的 AI 客服後台，整合了 LINE Messaging API、OpenAI GPT、Google Gemini 與 Supabase 資料庫。
 
-## 技術棧
-- **Frontend:** React (Vite + TypeScript + Tailwind CSS)
-- **Backend:** Netlify Functions (Node.js)
-- **Database/Auth:** Supabase
-- **Messaging:** LINE Messaging API
+## 🚀 部署流程與環境變數設定
 
-## 快速開始
+本專案設計為 **「零本機設定檔案」**，您可以完全透過 Netlify 控制台管理所有敏感資訊。
 
 ### 1. 資料庫設定 (Supabase)
-1. 在 Supabase 建立新專案。
-2. 前往 **SQL Editor**，複製並執行 `supabase_schema.sql` 中的所有內容。這會建立必要的資料表與安全策略。
-3. 前往 **Authentication** -> **Users**，手動建立一個管理員帳號。
+1. 建立 [Supabase](https://supabase.com/) 專案。
+2. 在 **SQL Editor** 執行專案目錄下的 `supabase_schema.sql` 以建立資料表。
+3. 在 **Authentication -> Users** 建立一組管理員 Email/密碼（用於登入後台）。
 
-### 2. 環境變數設定
-建立 `.env` 檔案並填入以下內容：
+### 2. 環境變數設定 (Netlify)
+將程式碼推送到 GitHub 並連結至 Netlify 後，請在 Netlify 的 **Site configuration > Environment variables** 設定以下四個變數：
 
-**前端 (.env):**
-```env
-VITE_SUPABASE_URL=你的_SUPABASE_URL
-VITE_SUPABASE_ANON_KEY=你的_SUPABASE_ANON_KEY
-```
+| 變數名稱 | 來源 | 說明 |
+| :--- | :--- | :--- |
+| `VITE_SUPABASE_URL` | Supabase Settings > API | 前端連接資料庫用 |
+| `VITE_SUPABASE_ANON_KEY` | Supabase Settings > API | 前端公開金鑰 |
+| `SUPABASE_URL` | Supabase Settings > API | 後端 Function 用 (與前端相同) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase Settings > API | **極重要！** 後端專用最高權限金鑰，請勿外流 |
 
-**Netlify (在 Netlify 控制台設定):**
-```env
-SUPABASE_URL=你的_SUPABASE_URL
-SUPABASE_SERVICE_ROLE_KEY=你的_SUPABASE_SERVICE_ROLE_KEY (用於後端寫入)
-```
+> **💡 為什麼有兩個 URL？** 
+> `VITE_` 開頭的變數會被編譯進前端網頁；而沒有 `VITE_` 的變數則專供 Netlify Functions (後端) 使用，安全性更高。
 
-### 3. 本地開發
-```bash
-npm install
-npm run dev
-```
+### 3. 本地開發 (不使用 .env 檔案)
+若您不想在電腦建立 `.env` 檔案，請使用 **Netlify CLI** 將雲端設定抓回本地：
 
-### 4. 部署至 Netlify
-1. 將程式碼推送到 GitHub。
-2. 在 Netlify 建立新專案並連結 GitHub。
-3. 設定上述環境變數。
-4. 部署完成後，複製產生的網址加上 `/.netlify/functions/line-webhook`。
-5. 將此 Webhook URL 填入 **LINE Developers Console** 的 Webhook URL 欄位。
+1. 安裝 CLI: `npm install -g netlify-cli`
+2. 登入: `netlify login`
+3. 連結專案: `netlify link`
+4. 啟動開發環境: `netlify dev`
 
-## 功能說明
-- **AI 切換:** 可隨時在 GPT 與 Gemini 之間切換。
-- **上下文記憶:** 自動帶入最近 5 筆對話，確保對話連貫。
-- **真人轉接:** 當使用者輸入設定的關鍵字時，AI 會停止回答，直到設定的超時時間結束或手動切換回 AI。
-- **參考資料:** 可輸入產品手冊或 FAQ，AI 會根據這些資訊回答問題。
+執行 `netlify dev` 後，系統會自動模擬 Netlify 環境並讀取雲端變數，您的本地網頁即可正常運作。
+
+### 4. LINE Webhook 串接
+1. 部署完成後，您的 Webhook 地址為：`https://你的網址.netlify.app/.netlify/functions/line-webhook`
+2. 將此網址填入 **LINE Developers Console** 的 Webhook URL 欄位並開啟 "Use webhook"。
+
+---
+
+## 🛠️ 功能亮點
+- **雙 AI 引擎切換**：隨時切換 GPT 或 Gemini。
+- **上下文記憶對話**：自動推算最近 5 筆對話，提供連貫的服務體驗。
+- **真人轉接機制**：設定關鍵字（如：真人、客服）自動切換模式，並支援超時自動轉回 AI。
+- **知識庫參考**：可輸入純文字參考資料，AI 會優先參考該資訊回答。
+- **對話記錄監控**：後台即時顯示最近 100 筆互動記錄。
