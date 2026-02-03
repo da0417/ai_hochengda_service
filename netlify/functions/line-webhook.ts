@@ -154,7 +154,8 @@ export const handler: Handler = async (event) => {
         }
       } catch (aiError: any) {
         console.error('AI Processing Error:', aiError);
-        aiResult = { text: '抱歉，服務暫時出現問題，請稍後再試。' };
+        // 回傳具體錯誤訊息，方便除錯
+        aiResult = { text: `❌ AI 處理失敗：\n${aiError.message || '未知錯誤'}\n請檢查模型名稱或 API Key。` };
       }
 
       // 7. Reply and Log
@@ -219,9 +220,10 @@ async function callGPT(settings: any, history: any[], currentMessage: string) {
 
       const result: any = await response.json();
       
-      if (result.error) {
-        console.error('OpenAI Responses API Error:', result.error);
-        throw new Error(result.error.message || 'Responses API Error');
+      if (!response.ok || result.error) {
+        const errMsg = result.error?.message || response.statusText;
+        console.error('OpenAI Responses API Error:', errMsg);
+        throw new Error(`GPT-5 API 錯誤: ${errMsg}`);
       }
 
       return {
@@ -230,12 +232,14 @@ async function callGPT(settings: any, history: any[], currentMessage: string) {
       };
     } catch (e: any) {
       console.warn('GPT-5 Responses API failed, falling back to Chat Completions:', e.message);
-      // 如果 Responses API 失敗（例如 mini/nano 不支援），進入下方的傳統 API 邏輯
+      // 如果不是 API 本身報錯（例如是網路問題），則繼續執行下方的傳統 API
+      if (e.message.includes('GPT-5 API 錯誤')) throw e; 
     }
   }
 
-  // 傳統 Chat Completions API (GPT-4 以前或 GPT-5 Fallback)
-  const openai = new OpenAI({ apiKey: settings.gpt_api_key });
+  // 傳統 Chat Completions API
+  try {
+    const openai = new OpenAI({ apiKey: settings.gpt_api_key });
     const messages: any[] = [{ role: 'system', content: systemContent }];
 
     for (const h of history) {
@@ -254,6 +258,10 @@ async function callGPT(settings: any, history: any[], currentMessage: string) {
       text: completion.choices[0].message.content || '',
       id: completion.id
     };
+  } catch (e: any) {
+    throw new Error(`OpenAI API 錯誤: ${e.message}`);
+  }
+}
 }
 
 async function callGemini(settings: any, history: any[], currentMessage: string) {
