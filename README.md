@@ -1,48 +1,111 @@
-# AI 客服系統 (LINE + Supabase + React)
+# 🤖 AI 客服系統 (LINE + Supabase + React)
 
-這是一個企業級的 AI 客服後台，整合了 LINE Messaging API、OpenAI GPT、Google Gemini 與 Supabase 資料庫。
+這是一個企業級的 AI 客服後台，支援 OpenAI GPT-5/4、Google Gemini 3/1.5 以及真人客服轉接通知。
 
-## 🚀 部署流程與環境變數設定
+[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/scorpioliu0953/ai_customer_service)
 
-本專案設計為 **「零本機設定檔案」**，您可以完全透過 Netlify 控制台管理所有敏感資訊。
-
-### 1. 資料庫設定 (Supabase)
-1. 建立 [Supabase](https://supabase.com/) 專案。
-2. 在 **SQL Editor** 執行專案目錄下的 `supabase_schema.sql` 以建立資料表。
-3. 在 **Authentication -> Users** 建立一組管理員 Email/密碼（用於登入後台）。
-
-### 2. 環境變數設定 (Netlify)
-將程式碼推送到 GitHub 並連結至 Netlify 後，請在 Netlify 的 **Site configuration > Environment variables** 設定以下四個變數：
-
-| 變數名稱 | 來源 | 說明 |
-| :--- | :--- | :--- |
-| `VITE_SUPABASE_URL` | Supabase Settings > API | 前端連接資料庫用 |
-| `VITE_SUPABASE_ANON_KEY` | Supabase Settings > API | 前端公開金鑰 |
-| `SUPABASE_URL` | Supabase Settings > API | 後端 Function 用 (與前端相同) |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase Settings > API | **極重要！** 後端專用最高權限金鑰，請勿外流 |
-
-> **💡 為什麼有兩個 URL？** 
-> `VITE_` 開頭的變數會被編譯進前端網頁；而沒有 `VITE_` 的變數則專供 Netlify Functions (後端) 使用，安全性更高。
-
-### 3. 本地開發 (不使用 .env 檔案)
-若您不想在電腦建立 `.env` 檔案，請使用 **Netlify CLI** 將雲端設定抓回本地：
-
-1. 安裝 CLI: `npm install -g netlify-cli`
-2. 登入: `netlify login`
-3. 連結專案: `netlify link`
-4. 啟動開發環境: `netlify dev`
-
-執行 `netlify dev` 後，系統會自動模擬 Netlify 環境並讀取雲端變數，您的本地網頁即可正常運作。
-
-### 4. LINE Webhook 串接
-1. 部署完成後，您的 Webhook 地址為：`https://你的網址.netlify.app/.netlify/functions/line-webhook`
-2. 將此網址填入 **LINE Developers Console** 的 Webhook URL 欄位並開啟 "Use webhook"。
+## 🌟 功能亮點
+- **雙 AI 引擎**：支援最新的 GPT-5 (Responses API) 與 Gemini 3 (Thinking Level)。
+- **知識庫支援**：支援純文字與 PDF 檔案參考，AI 會根據資料內容進行回答。
+- **真人轉接機制**：自動偵測關鍵字，發送 LINE 通知給專員，並提供手動轉回 AI 的管理後台。
+- **對話記錄**：即時儲存與查看最近 100 筆對話，並自動顯示用戶暱稱。
 
 ---
 
-## 🛠️ 功能亮點
-- **雙 AI 引擎切換**：隨時切換 GPT 或 Gemini。
-- **上下文記憶對話**：自動推算最近 5 筆對話，提供連貫的服務體驗。
-- **真人轉接機制**：設定關鍵字（如：真人、客服）自動切換模式，並支援超時自動轉回 AI。
-- **知識庫參考**：可輸入純文字參考資料，AI 會優先參考該資訊回答。
-- **對話記錄監控**：後台即時顯示最近 100 筆互動記錄。
+## 🚀 快速安裝步驟
+
+### 1. Fork 本專案
+點擊頁面右上角的 **Fork** 按鈕，將本專案複製到您的 GitHub 帳號下。
+
+### 2. 資料庫設定 (Supabase)
+1. 建立 [Supabase](https://supabase.com/) 專案。
+2. 前往 **SQL Editor**，複製並執行下方的 **「完整資料庫腳本」**。
+3. 在 **Authentication > Users** 建立一組管理員帳號（用於登入後台）。
+4. 在 **Storage** 建立一個名為 `knowledge_base` 的 **Public Bucket**。
+
+### 3. 一鍵部署至 Netlify
+1. 點擊上方的 **Deploy to Netlify** 按鈕，或手動連結您的 GitHub 專案。
+2. 在 Netlify 控制台的 **Environment variables** 設定以下變數：
+
+| 變數名稱 | 來源 | 說明 |
+| :--- | :--- | :--- |
+| `VITE_SUPABASE_URL` | Supabase API | 前端連接資料庫用 |
+| `VITE_SUPABASE_ANON_KEY` | Supabase API | 前端公開金鑰 |
+| `SUPABASE_URL` | Supabase API | 後端 Function 用 (與前端相同) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase API | **隱私** 後端專用最高權限金鑰 |
+
+---
+
+## 📜 完整資料庫腳本 (SQL)
+請將以下內容完整複製到 Supabase 的 SQL Editor 中執行：
+
+```sql
+-- 1. 設定表
+CREATE TABLE IF NOT EXISTS public.settings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    is_ai_enabled BOOLEAN DEFAULT true,
+    active_ai TEXT DEFAULT 'gpt',
+    gpt_api_key TEXT,
+    gpt_model_name TEXT DEFAULT 'gpt-4o',
+    gpt_temperature FLOAT DEFAULT 0.7,
+    gpt_max_tokens INTEGER DEFAULT 500,
+    gpt_reasoning_effort TEXT DEFAULT 'none',
+    gpt_verbosity TEXT DEFAULT 'medium',
+    gemini_api_key TEXT,
+    gemini_model_name TEXT DEFAULT 'gemini-pro',
+    gemini_temperature FLOAT DEFAULT 1.0,
+    gemini_max_tokens INTEGER DEFAULT 500,
+    gemini_thinking_level TEXT DEFAULT 'high',
+    system_prompt TEXT DEFAULT '你是一個專業的客服助手。',
+    reference_text TEXT DEFAULT '',
+    reference_file_url TEXT DEFAULT '',
+    line_channel_access_token TEXT,
+    line_channel_secret TEXT,
+    handover_keywords TEXT DEFAULT '真人,客服,人工',
+    handover_timeout_minutes INTEGER DEFAULT 30,
+    agent_user_ids TEXT DEFAULT ''
+);
+
+-- 2. 對話紀錄表
+CREATE TABLE IF NOT EXISTS public.chat_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    line_user_id TEXT NOT NULL,
+    webhook_event_id TEXT UNIQUE,
+    user_name TEXT,
+    message TEXT NOT NULL,
+    sender TEXT NOT NULL,
+    ai_type TEXT,
+    ai_response_id TEXT
+);
+
+-- 3. 用戶狀態表
+CREATE TABLE IF NOT EXISTS public.user_states (
+    line_user_id TEXT PRIMARY KEY,
+    nickname TEXT,
+    is_human_mode BOOLEAN DEFAULT false,
+    last_human_interaction TIMESTAMP WITH TIME ZONE
+);
+
+-- 4. 啟用 RLS 與初始資料
+ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.chat_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_states ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow Auth Access" ON public.settings FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "Allow Auth Access Logs" ON public.chat_logs FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "Allow Auth Access States" ON public.user_states FOR ALL USING (auth.role() = 'authenticated');
+
+INSERT INTO public.settings (id) SELECT gen_random_uuid() WHERE NOT EXISTS (SELECT 1 FROM public.settings);
+```
+
+---
+
+## 🛠️ 本地開發
+```bash
+npm install
+# 建議使用 Netlify CLI 讀取雲端變數
+netlify dev
+```
