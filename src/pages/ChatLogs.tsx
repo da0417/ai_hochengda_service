@@ -12,9 +12,13 @@ export default function ChatLogs() {
 
   const fetchLogs = async () => {
     try {
+      // 透過 left join 取得 user_states 中的暱稱
       const { data, error } = await supabase
         .from('chat_logs')
-        .select('*')
+        .select(`
+          *,
+          user_states:line_user_id (nickname)
+        `)
         .order('created_at', { ascending: false })
         .limit(100);
 
@@ -44,7 +48,7 @@ export default function ChatLogs() {
           onClick={fetchLogs}
           className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
         >
-          <Clock className="w-5 h-5 text-gray-500" />
+          <Clock className="w-5 h-5 text-gray-400" />
         </button>
       </div>
 
@@ -65,42 +69,46 @@ export default function ChatLogs() {
                   <td colSpan={4} className="px-6 py-8 text-center text-gray-500">尚無記錄</td>
                 </tr>
               ) : (
-                logs.map((log) => (
-                  <tr key={log.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 text-sm text-gray-500 whitespace-nowrap">
-                      {formatDate(log.created_at)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        {log.sender === 'user' ? (
-                          <>
-                            <User className="w-4 h-4 text-blue-500" />
-                            <span className="text-sm font-medium text-gray-700">用戶 ({log.line_user_id.substring(0, 8)}...)</span>
-                          </>
-                        ) : (
-                          <>
-                            <Bot className="w-4 h-4 text-green-500" />
-                            <span className="text-sm font-medium text-gray-700">AI 客服</span>
-                          </>
+                logs.map((log) => {
+                  const userNickname = log.user_states?.nickname || log.user_name || `用戶 (${log.line_user_id.substring(0, 8)}...)`;
+                  
+                  return (
+                    <tr key={log.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4 text-sm text-gray-500 whitespace-nowrap">
+                        {formatDate(log.created_at)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          {log.sender === 'user' ? (
+                            <>
+                              <User className="w-4 h-4 text-blue-500" />
+                              <span className="text-sm font-medium text-gray-700">{userNickname}</span>
+                            </>
+                          ) : (
+                            <>
+                              <Bot className="w-4 h-4 text-green-500" />
+                              <span className="text-sm font-medium text-gray-700">AI 客服</span>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <p className="text-sm text-gray-700 break-words max-w-lg">
+                          {log.message}
+                        </p>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {log.ai_type && (
+                          <span className={`px-2 py-1 text-xs rounded-full ${
+                            log.ai_type === 'gpt' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+                          }`}>
+                            {log.ai_type.toUpperCase()}
+                          </span>
                         )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="text-sm text-gray-700 line-clamp-2 max-w-md">
-                        {log.message}
-                      </p>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {log.ai_type && (
-                        <span className={`px-2 py-1 text-xs rounded-full ${
-                          log.ai_type === 'gpt' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
-                        }`}>
-                          {log.ai_type.toUpperCase()}
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
