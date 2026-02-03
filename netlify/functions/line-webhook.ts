@@ -188,12 +188,20 @@ async function callGPT(settings: any, history: any[], currentMessage: string) {
   }
   messages.push({ role: 'user', content: currentMessage });
 
-  const completion = await openai.chat.completions.create({
+  const completionParams: any = {
     model: settings.gpt_model_name,
     messages: messages,
     temperature: settings.gpt_temperature,
-    max_tokens: settings.gpt_max_tokens,
-  });
+  };
+
+  // 根據模型名稱決定使用哪種 token 參數
+  if (isGPT5 || settings.gpt_model_name.startsWith('o1') || settings.gpt_model_name.startsWith('o3')) {
+    completionParams.max_completion_tokens = settings.gpt_max_tokens;
+  } else {
+    completionParams.max_tokens = settings.gpt_max_tokens;
+  }
+
+  const completion = await openai.chat.completions.create(completionParams);
   return { text: completion.choices[0].message.content || '', id: completion.id };
 }
 
