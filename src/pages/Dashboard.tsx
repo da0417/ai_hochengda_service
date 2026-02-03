@@ -10,7 +10,6 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchSettings();
-    // In a real app, this would be your Netlify function URL
     setWebhookUrl(window.location.origin + '/.netlify/functions/line-webhook');
   }, []);
 
@@ -35,14 +34,17 @@ export default function Dashboard() {
     try {
       const { error } = await supabase
         .from('settings')
-        .update(settings)
+        .update({
+          ...settings,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', settings.id);
 
       if (error) throw error;
       alert('設定已儲存！');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving settings:', error);
-      alert('儲存失敗');
+      alert(`儲存失敗：${error.message}\n請確認資料庫已執行對應的 ALTER TABLE SQL。`);
     } finally {
       setSaving(false);
     }
@@ -73,25 +75,18 @@ export default function Dashboard() {
 
       const { error: uploadError } = await supabase.storage
         .from('knowledge_base')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
+        .upload(filePath, file);
 
-      if (uploadError) {
-        console.error('Supabase Upload Error Details:', uploadError);
-        throw new Error(uploadError.message);
-      }
+      if (uploadError) throw uploadError;
 
       const { data: { publicUrl } } = supabase.storage
         .from('knowledge_base')
         .getPublicUrl(filePath);
 
       setSettings({ ...settings, reference_file_url: publicUrl });
-      alert('檔案上傳成功！請點擊下方的「儲存變更」按鈕。');
+      alert('檔案上傳成功！請記得點擊「儲存變更」。');
     } catch (error: any) {
-      console.error('Full Upload Error:', error);
-      alert(`上傳失敗：${error.message || '未知錯誤'}。請確認您已在 Supabase 建立名為 knowledge_base 的 Bucket。`);
+      alert(`上傳失敗：${error.message}`);
     } finally {
       setSaving(false);
     }
@@ -101,7 +96,7 @@ export default function Dashboard() {
   if (!settings) return <div>找不到設定檔</div>;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
+    <div className="max-w-4xl mx-auto space-y-8 pb-20">
       <div className="flex justify-between items-center bg-white p-6 rounded-xl shadow-sm border">
         <div>
           <h2 className="text-2xl font-bold text-gray-800">系統主控台</h2>
@@ -109,7 +104,7 @@ export default function Dashboard() {
         </div>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-gray-700">啟用 AI 客服</span>
+            <span className="text-sm font-medium text-gray-700"> 啟用 AI 客服</span>
             <button
               onClick={() => setSettings({ ...settings, is_ai_enabled: !settings.is_ai_enabled })}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${settings.is_ai_enabled ? 'bg-green-500' : 'bg-gray-300'}`}
@@ -117,11 +112,7 @@ export default function Dashboard() {
               <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${settings.is_ai_enabled ? 'translate-x-6' : 'translate-x-1'}`} />
             </button>
           </div>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
-          >
+          <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50">
             <Save className="w-4 h-4" />
             {saving ? '儲存中...' : '儲存變更'}
           </button>
@@ -130,29 +121,13 @@ export default function Dashboard() {
 
       {/* AI Provider Switch */}
       <div className="grid grid-cols-2 gap-4">
-        <button
-          onClick={() => setSettings({ ...settings, active_ai: 'gpt' })}
-          className={`p-6 rounded-xl border-2 transition-all flex items-center gap-4 ${settings.active_ai === 'gpt' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}
-        >
-          <div className={`p-3 rounded-lg ${settings.active_ai === 'gpt' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-500'}`}>
-            <Bot className="w-6 h-6" />
-          </div>
-          <div className="text-left">
-            <h3 className="font-bold">OpenAI GPT</h3>
-            <p className="text-sm text-gray-500">使用 GPT-3.5/4 模型</p>
-          </div>
+        <button onClick={() => setSettings({ ...settings, active_ai: 'gpt' })} className={`p-6 rounded-xl border-2 transition-all flex items-center gap-4 ${settings.active_ai === 'gpt' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
+          <div className={`p-3 rounded-lg ${settings.active_ai === 'gpt' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-500'}`}><Bot className="w-6 h-6" /></div>
+          <div className="text-left"><h3 className="font-bold">OpenAI GPT</h3><p className="text-sm text-gray-500">使用 GPT-5/4 系列模型</p></div>
         </button>
-        <button
-          onClick={() => setSettings({ ...settings, active_ai: 'gemini' })}
-          className={`p-6 rounded-xl border-2 transition-all flex items-center gap-4 ${settings.active_ai === 'gemini' ? 'border-purple-500 bg-purple-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}
-        >
-          <div className={`p-3 rounded-lg ${settings.active_ai === 'gemini' ? 'bg-purple-500 text-white' : 'bg-gray-100 text-gray-500'}`}>
-            <Bot className="w-6 h-6" />
-          </div>
-          <div className="text-left">
-            <h3 className="font-bold">Google Gemini</h3>
-            <p className="text-sm text-gray-500">使用 Gemini Pro 模型</p>
-          </div>
+        <button onClick={() => setSettings({ ...settings, active_ai: 'gemini' })} className={`p-6 rounded-xl border-2 transition-all flex items-center gap-4 ${settings.active_ai === 'gemini' ? 'border-purple-500 bg-purple-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
+          <div className={`p-3 rounded-lg ${settings.active_ai === 'gemini' ? 'bg-purple-500 text-white' : 'bg-gray-100 text-gray-500'}`}><Bot className="w-6 h-6" /></div>
+          <div className="text-left"><h3 className="font-bold">Google Gemini</h3><p className="text-sm text-gray-500">使用 Gemini 1.5 系列</p></div>
         </button>
       </div>
 
@@ -162,87 +137,37 @@ export default function Dashboard() {
           <Bot className="w-5 h-5 text-blue-500" />
           {settings.active_ai === 'gpt' ? 'OpenAI 設定' : 'Gemini 設定'}
         </h3>
-        
         <div className="grid grid-cols-2 gap-6">
           <div className="col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1">API Key</label>
-            <input
-              type="password"
-              name={settings.active_ai === 'gpt' ? 'gpt_api_key' : 'gemini_api_key'}
-              value={settings.active_ai === 'gpt' ? settings.gpt_api_key : settings.gemini_api_key}
-              onChange={handleChange}
-              className="w-full px-4 py-2 border rounded-lg"
-              placeholder="輸入 API 金鑰"
-            />
+            <input type="password" name={settings.active_ai === 'gpt' ? 'gpt_api_key' : 'gemini_api_key'} value={settings.active_ai === 'gpt' ? (settings.gpt_api_key || '') : (settings.gemini_api_key || '')} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg" placeholder="輸入 API 金鑰" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">模型名稱</label>
-            <input
-              type="text"
-              name={settings.active_ai === 'gpt' ? 'gpt_model_name' : 'gemini_model_name'}
-              value={settings.active_ai === 'gpt' ? settings.gpt_model_name : settings.gemini_model_name}
-              onChange={handleChange}
-              className="w-full px-4 py-2 border rounded-lg"
-              placeholder={settings.active_ai === 'gpt' ? "例如: gpt-4o, gpt-5" : "例如: gemini-1.5-pro"}
-            />
-            <p className="text-xs text-gray-400 mt-1">
-              {settings.active_ai === 'gpt' 
-                ? "支援所有 OpenAI 模型，包含 gpt-4o, o1-preview 或未來的 gpt-5。" 
-                : "支援 Google 最新模型，如 gemini-1.5-pro 或 gemini-1.5-flash。"}
-            </p>
+            <input type="text" name={settings.active_ai === 'gpt' ? 'gpt_model_name' : 'gemini_model_name'} value={settings.active_ai === 'gpt' ? (settings.gpt_model_name || '') : (settings.gemini_model_name || '')} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg" placeholder="例如: gpt-4o, gpt-5.2" />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Temperature</label>
-              <input
-                type="number"
-                step="0.1"
-                name={settings.active_ai === 'gpt' ? 'gpt_temperature' : 'gemini_temperature'}
-                value={settings.active_ai === 'gpt' ? settings.gpt_temperature : settings.gemini_temperature}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border rounded-lg"
-              />
+              <input type="number" step="0.1" name={settings.active_ai === 'gpt' ? 'gpt_temperature' : 'gemini_temperature'} value={settings.active_ai === 'gpt' ? settings.gpt_temperature : settings.gemini_temperature} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Max Tokens</label>
-              <input
-                type="number"
-                name={settings.active_ai === 'gpt' ? 'gpt_max_tokens' : 'gemini_max_tokens'}
-                value={settings.active_ai === 'gpt' ? settings.gpt_max_tokens : settings.gemini_max_tokens}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border rounded-lg"
-              />
+              <input type="number" name={settings.active_ai === 'gpt' ? 'gpt_max_tokens' : 'gemini_max_tokens'} value={settings.active_ai === 'gpt' ? settings.gpt_max_tokens : settings.gemini_max_tokens} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg" />
             </div>
           </div>
-
-          {settings.active_ai === 'gpt' && settings.gpt_model_name.includes('gpt-5') && (
-            <div className="grid grid-cols-2 gap-4 p-4 bg-blue-50 rounded-lg border border-blue-100">
+          {settings.active_ai === 'gpt' && settings.gpt_model_name?.includes('gpt-5') && (
+            <div className="col-span-2 grid grid-cols-2 gap-4 p-4 bg-blue-50 rounded-lg border border-blue-100">
               <div>
-                <label className="block text-sm font-bold text-blue-800 mb-1">GPT-5 推理力道 (Reasoning Effort)</label>
-                <select 
-                  name="gpt_reasoning_effort" 
-                  value={settings.gpt_reasoning_effort} 
-                  onChange={handleChange}
-                  className="w-full px-4 py-2 border rounded-lg bg-white"
-                >
-                  <option value="none">None (預設/低延遲)</option>
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                  <option value="xhigh">XHigh (最強推理)</option>
+                <label className="block text-sm font-bold text-blue-800 mb-1">推理力道 (Reasoning Effort)</label>
+                <select name="gpt_reasoning_effort" value={settings.gpt_reasoning_effort || 'none'} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg bg-white">
+                  <option value="none">None</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="xhigh">XHigh</option>
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-bold text-blue-800 mb-1">GPT-5 詳細程度 (Verbosity)</label>
-                <select 
-                  name="gpt_verbosity" 
-                  value={settings.gpt_verbosity} 
-                  onChange={handleChange}
-                  className="w-full px-4 py-2 border rounded-lg bg-white"
-                >
-                  <option value="low">Low (簡潔)</option>
-                  <option value="medium">Medium (標準)</option>
-                  <option value="high">High (詳盡)</option>
+                <label className="block text-sm font-bold text-blue-800 mb-1">詳細程度 (Verbosity)</label>
+                <select name="gpt_verbosity" value={settings.gpt_verbosity || 'medium'} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg bg-white">
+                  <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option>
                 </select>
               </div>
             </div>
@@ -252,142 +177,62 @@ export default function Dashboard() {
 
       {/* AI System Prompt & Reference */}
       <div className="bg-white p-8 rounded-xl shadow-sm border space-y-6">
-        <h3 className="text-lg font-bold border-b pb-4">AI 指令與參考資料</h3>
+        <h3 className="text-lg font-bold border-b pb-4">AI 指令與知識庫</h3>
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">AI 系統指令 (System Prompt)</label>
-            <textarea
-              name="system_prompt"
-              value={settings.system_prompt}
-              onChange={handleChange}
-              rows={4}
-              className="w-full px-4 py-2 border rounded-lg"
-              placeholder="例如：你是一個專業的客服助手。建議在此加入「請根據提供的檔案內容回答」等指令。"
-            />
+            <label className="block text-sm font-medium text-gray-700 mb-1">AI 系統指令</label>
+            <textarea name="system_prompt" value={settings.system_prompt || ''} onChange={handleChange} rows={4} className="w-full px-4 py-2 border rounded-lg" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">參考資料 (Raw Text)</label>
-            <textarea
-              name="reference_text"
-              value={settings.reference_text}
-              onChange={handleChange}
-              rows={6}
-              className="w-full px-4 py-2 border rounded-lg"
-              placeholder="輸入 AI 可以參考的產品資訊..."
-            />
+            <label className="block text-sm font-medium text-gray-700 mb-1">參考文字資料</label>
+            <textarea name="reference_text" value={settings.reference_text || ''} onChange={handleChange} rows={4} className="w-full px-4 py-2 border rounded-lg" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">參考檔案上傳 (支援 PDF, TXT)</label>
-            <div 
-              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-              className="relative border-2 border-dashed border-gray-300 rounded-lg p-6 flex flex-col items-center justify-center text-gray-500 hover:border-blue-400 hover:bg-blue-50 transition-all cursor-pointer"
-            >
-              <input
-                type="file"
-                accept=".pdf,.txt"
-                onChange={handleFileUpload}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-              />
+            <label className="block text-sm font-medium text-gray-700 mb-1">參考檔案上傳 (PDF/TXT)</label>
+            <div className="relative border-2 border-dashed border-gray-300 rounded-lg p-6 flex flex-col items-center justify-center text-gray-500 hover:border-blue-400 hover:bg-blue-50">
+              <input type="file" accept=".pdf,.txt" onChange={handleFileUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
               <RefreshCcw className="w-8 h-8 mb-2" />
-              <p>{settings.reference_file_url ? '檔案已上傳 (點擊或拖曳更換)' : '拖曳檔案至此或點擊上傳'}</p>
-              {settings.reference_file_url && (
-                <p className="text-xs text-blue-600 mt-2 break-all">{settings.reference_file_url}</p>
-              )}
-            </div>
-            <p className="text-xs text-gray-400 mt-2">
-              ※ 重要：請至 Supabase SQL Editor 執行 RLS 政策指令，否則上傳會被拒絕。
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* LINE Settings */}
-      <div className="bg-white p-8 rounded-xl shadow-sm border space-y-6">
-        <h3 className="text-lg font-bold border-b pb-4 flex items-center gap-2">
-          <MessageCircle className="w-5 h-5 text-green-500" />
-          LINE 渠道設定
-        </h3>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Webhook URL (填入 LINE Developer Console)</label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                readOnly
-                value={webhookUrl}
-                className="flex-1 px-4 py-2 border rounded-lg bg-gray-50 font-mono text-sm"
-              />
-              <button onClick={handleCopyWebhook} className="p-2 border rounded-lg hover:bg-gray-100">
-                <Copy className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Channel Access Token</label>
-              <input
-                type="password"
-                name="line_channel_access_token"
-                value={settings.line_channel_access_token}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border rounded-lg"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Channel Secret</label>
-              <input
-                type="password"
-                name="line_channel_secret"
-                value={settings.line_channel_secret}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border rounded-lg"
-              />
+              <p>{settings.reference_file_url ? '檔案已上傳 (點擊更換)' : '點擊或拖曳上傳'}</p>
+              {settings.reference_file_url && <p className="text-xs text-blue-600 mt-2 break-all">{settings.reference_file_url}</p>}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Handover Settings */}
+      {/* LINE & Handover Settings */}
       <div className="bg-white p-8 rounded-xl shadow-sm border space-y-6">
-        <h3 className="text-lg font-bold border-b pb-4">人工客服轉接</h3>
+        <h3 className="text-lg font-bold border-b pb-4 flex items-center gap-2"><MessageCircle className="w-5 h-5 text-green-500" />LINE 與人工轉接</h3>
         <div className="grid grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">轉接關鍵字 (用半形逗號隔開)</label>
-            <input
-              type="text"
-              name="handover_keywords"
-              value={settings.handover_keywords}
-              onChange={handleChange}
-              placeholder="真人,客服,人工"
-              className="w-full px-4 py-2 border rounded-lg"
-            />
+          <div className="col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Webhook URL</label>
+            <div className="flex gap-2 font-mono text-sm">
+              <input type="text" readOnly value={webhookUrl} className="flex-1 px-4 py-2 border rounded-lg bg-gray-50" />
+              <button onClick={handleCopyWebhook} className="p-2 border rounded-lg hover:bg-gray-100"><Copy className="w-5 h-5" /></button>
+            </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">自動轉回 AI 時間 (分鐘)</label>
-            <input
-              type="number"
-              name="handover_timeout_minutes"
-              value={settings.handover_timeout_minutes}
-              onChange={handleChange}
-              className="w-full px-4 py-2 border rounded-lg"
-            />
+            <label className="block text-sm font-medium text-gray-700 mb-1">Channel Access Token</label>
+            <input type="password" name="line_channel_access_token" value={settings.line_channel_access_token || ''} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Channel Secret</label>
+            <input type="password" name="line_channel_secret" value={settings.line_channel_secret || ''} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">轉接關鍵字 (逗號隔開)</label>
+            <input type="text" name="handover_keywords" value={settings.handover_keywords || ''} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">自動轉回 AI 時間 (分)</label>
+            <input type="number" name="handover_timeout_minutes" value={settings.handover_timeout_minutes || 30} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg" />
           </div>
           <div className="col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">專人客服 LINE User ID (用半形逗號隔開)</label>
-            <input
-              type="text"
-              name="agent_user_ids"
-              value={settings.agent_user_ids}
-              onChange={handleChange}
-              placeholder="U123..., U456..."
-              className="w-full px-4 py-2 border rounded-lg"
-            />
-            <p className="text-xs text-gray-400 mt-1">當有人呼叫真人客服時，系統會發送 Push Message 通知這些 ID。</p>
+            <label className="block text-sm font-medium text-gray-700 mb-1">客服專員 LINE IDs (通知用)</label>
+            <input type="text" name="agent_user_ids" value={settings.agent_user_ids || ''} onChange={handleChange} placeholder="U123..., U456..." className="w-full px-4 py-2 border rounded-lg" />
           </div>
         </div>
       </div>
 
-      {/* Handover Management */}
       <HandoverList />
     </div>
   );
@@ -399,76 +244,42 @@ function HandoverList() {
 
   useEffect(() => {
     fetchHandoverUsers();
-    const interval = setInterval(fetchHandoverUsers, 10000); // 每 10 秒刷新一次
+    const interval = setInterval(fetchHandoverUsers, 10000);
     return () => clearInterval(interval);
   }, []);
 
   const fetchHandoverUsers = async () => {
-    const { data, error } = await supabase
-      .from('user_states')
-      .select('*')
-      .eq('is_human_mode', true)
-      .order('last_human_interaction', { ascending: false });
-
+    const { data, error } = await supabase.from('user_states').select('*').eq('is_human_mode', true).order('last_human_interaction', { ascending: false });
     if (!error) setUsers(data || []);
     setLoading(false);
   };
 
   const switchToAI = async (userId: string) => {
-    const { error } = await supabase
-      .from('user_states')
-      .update({ is_human_mode: false })
-      .eq('line_user_id', userId);
-
+    const { error } = await supabase.from('user_states').update({ is_human_mode: false }).eq('line_user_id', userId);
     if (!error) {
       alert('已成功切換回 AI 客服');
       fetchHandoverUsers();
     }
   };
 
-  if (loading) return null;
+  if (loading || users.length === 0) return null;
 
   return (
-    <div className="bg-white p-8 rounded-xl shadow-sm border space-y-6">
-      <h3 className="text-lg font-bold border-b pb-4 flex items-center gap-2 text-red-600">
-        <Bot className="w-5 h-5" />
-        待處理真人請求 ({users.length})
-      </h3>
+    <div className="bg-white p-8 rounded-xl shadow-sm border border-red-100 space-y-4">
+      <h3 className="text-lg font-bold text-red-600 flex items-center gap-2"><Bot className="w-5 h-5" />待處理專人請求</h3>
       <div className="overflow-x-auto">
-        <table className="w-full text-left">
-          <thead>
-            <tr className="text-sm font-semibold text-gray-600 border-b">
-              <th className="py-3 px-4">用戶暱稱</th>
-              <th className="py-3 px-4">LINE User ID</th>
-              <th className="py-3 px-4">呼叫時間</th>
-              <th className="py-3 px-4">操作</th>
+        <table className="w-full text-left text-sm">
+          <thead><tr className="border-b">
+            <th className="py-2 px-4"> 暱稱</th><th className="py-2 px-4">ID</th><th className="py-2 px-4">時間</th><th className="py-2 px-4">操作</th>
+          </tr></thead>
+          <tbody>{users.map(user => (
+            <tr key={user.line_user_id} className="border-b hover:bg-red-50">
+              <td className="py-2 px-4">{user.nickname || '未知'}</td>
+              <td className="py-2 px-4 font-mono text-xs">{user.line_user_id}</td>
+              <td className="py-2 px-4">{new Date(user.last_human_interaction).toLocaleString()}</td>
+              <td className="py-2 px-4"><button onClick={() => switchToAI(user.line_user_id)} className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700">轉回 AI</button></td>
             </tr>
-          </thead>
-          <tbody>
-            {users.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="py-8 text-center text-gray-500">目前沒有待處理的請求</td>
-              </tr>
-            ) : (
-              users.map(user => (
-                <tr key={user.line_user_id} className="border-b hover:bg-gray-50">
-                  <td className="py-3 px-4 font-medium">{user.nickname || '未取得'}</td>
-                  <td className="py-3 px-4 font-mono text-xs">{user.line_user_id}</td>
-                  <td className="py-3 px-4 text-sm text-gray-500">
-                    {new Date(user.last_human_interaction).toLocaleString('zh-TW')}
-                  </td>
-                  <td className="py-3 px-4">
-                    <button
-                      onClick={() => switchToAI(user.line_user_id)}
-                      className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-colors"
-                    >
-                      轉回 AI
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
+          ))}</tbody>
         </table>
       </div>
     </div>
