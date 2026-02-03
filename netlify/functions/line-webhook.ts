@@ -123,11 +123,16 @@ export const handler: Handler = async (event) => {
 
       // 6. Call AI
       let aiResult: { text: string, id?: string } = { text: '' };
-      if (settings.active_ai === 'gpt') {
-        aiResult = await callGPT(settings, history, userMessage);
-      } else {
-        const text = await callGemini(settings, history, userMessage);
-        aiResult = { text };
+      try {
+        if (settings.active_ai === 'gpt') {
+          aiResult = await callGPT(settings, history, userMessage);
+        } else {
+          const text = await callGemini(settings, history, userMessage);
+          aiResult = { text };
+        }
+      } catch (aiError: any) {
+        console.error('AI Processing Error:', aiError);
+        aiResult = { text: '抱歉，服務暫時出現問題，請稍後再試。' };
       }
 
       // 7. Reply and Log
@@ -166,38 +171,49 @@ async function callGPT(settings: any, history: any[], currentMessage: string) {
   const systemContent = `${settings.system_prompt}\n\n參考文字：\n${settings.reference_text}\n\n檔案內容參考：\n${fileContent}`;
 
   if (isGPT5) {
-    // 使用新的 Responses API (GPT-5 專用)
-    const lastAIResponse = [...history].reverse().find(h => h.sender === 'ai' && h.ai_response_id);
-    
-    const body: any = {
-      model: settings.gpt_model_name,
-      input: `System: ${systemContent}\n\nUser: ${currentMessage}`,
-      reasoning: { effort: settings.gpt_reasoning_effort || 'none' },
-      text: { verbosity: settings.gpt_verbosity || 'medium' }
-    };
+    try {
+      // 使用新的 Responses API
+      const lastAIResponse = [...history].reverse().find(h => h.sender === 'ai' && h.ai_response_id);
+      
+      const body: any = {
+        model: settings.gpt_model_name,
+        input: `System Instruction: ${systemContent}\n\nUser Question: ${currentMessage}`,
+        reasoning: { effort: settings.gpt_reasoning_effort || 'none' },
+        text: { verbosity: settings.gpt_verbosity || 'medium' }
+      };
 
-    // 傳遞 CoT (Chain of Thought) 以提升智力
-    if (lastAIResponse) {
-      body.previous_response_id = lastAIResponse.ai_response_id;
+      if (lastAIResponse) {
+        body.previous_response_id = lastAIResponse.ai_response_id;
+      }
+
+      const response = await fetch('https://api.openai.com/v1/responses', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${settings.gpt_api_key}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
+
+      const result: any = await response.json();
+      
+      if (result.error) {
+        console.error('OpenAI Responses API Error:', result.error);
+        throw new Error(result.error.message || 'Responses API Error');
+      }
+
+      return {
+        text: result.output?.text || '',
+        id: result.id
+      };
+    } catch (e: any) {
+      console.warn('GPT-5 Responses API failed, falling back to Chat Completions:', e.message);
+      // 如果 Responses API 失敗（例如 mini/nano 不支援），進入下方的傳統 API 邏輯
     }
+  }
 
-    const response = await fetch('https://api.openai.com/v1/responses', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${settings.gpt_api_key}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(body)
-    });
-
-    const result: any = await response.json();
-    return {
-      text: result.output?.text || '',
-      id: result.id
-    };
-  } else {
-    // 傳統 Chat Completions API (GPT-4 以前)
-    const openai = new OpenAI({ apiKey: settings.gpt_api_key });
+  // 傳統 Chat Completions API (GPT-4 以前或 GPT-5 Fallback)
+  const openai = new OpenAI({ apiKey: settings.gpt_api_key });
     const messages: any[] = [{ role: 'system', content: systemContent }];
 
     for (const h of history) {

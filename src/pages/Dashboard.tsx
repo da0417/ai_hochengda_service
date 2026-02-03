@@ -238,7 +238,7 @@ export default function Dashboard() {
                   name="gpt_verbosity" 
                   value={settings.gpt_verbosity} 
                   onChange={handleChange}
-                  className="w-col px-4 py-2 border rounded-lg bg-white"
+                  className="w-full px-4 py-2 border rounded-lg bg-white"
                 >
                   <option value="low">Low (簡潔)</option>
                   <option value="medium">Medium (標準)</option>
@@ -262,7 +262,7 @@ export default function Dashboard() {
               onChange={handleChange}
               rows={4}
               className="w-full px-4 py-2 border rounded-lg"
-              placeholder="例如：你是一個專業的化妝品客服，請用親切口吻回答..."
+              placeholder="例如：你是一個專業的客服助手。建議在此加入「請根據提供的檔案內容回答」等指令。"
             />
           </div>
           <div>
@@ -273,7 +273,7 @@ export default function Dashboard() {
               onChange={handleChange}
               rows={6}
               className="w-full px-4 py-2 border rounded-lg"
-              placeholder="輸入 AI 可以參考的產品資訊、價格表或常見問題解答..."
+              placeholder="輸入 AI 可以參考的產品資訊..."
             />
           </div>
           <div>
@@ -291,6 +291,9 @@ export default function Dashboard() {
                 <p className="text-xs text-blue-600 mt-2 break-all">{settings.reference_file_url}</p>
               )}
             </div>
+            <p className="text-xs text-gray-400 mt-2">
+              ※ 若上傳失敗，請確認 Supabase Storage 已建立名為 "knowledge_base" 的 Public Bucket，並在 Policies 設定允許公開讀取與寫入。
+            </p>
           </div>
         </div>
       </div>
