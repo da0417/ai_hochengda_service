@@ -40,19 +40,6 @@ CREATE TABLE IF NOT EXISTS public.settings (
     agent_user_ids TEXT DEFAULT ''
 );
 
--- Chat Logs table
-CREATE TABLE IF NOT EXISTS public.chat_logs (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-    line_user_id TEXT NOT NULL,
-    webhook_event_id TEXT UNIQUE, -- 用於去重
-    user_name TEXT,
-    message TEXT NOT NULL,
-    sender TEXT NOT NULL, -- 'user' or 'ai'
-    ai_type TEXT, -- 'gpt' or 'gemini'
-    ai_response_id TEXT -- For GPT-5 CoT passing
-);
-
 -- User state table to track handover mode
 CREATE TABLE IF NOT EXISTS public.user_states (
     line_user_id TEXT PRIMARY KEY,
@@ -63,14 +50,10 @@ CREATE TABLE IF NOT EXISTS public.user_states (
 
 -- Enable RLS
 ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.chat_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_states ENABLE ROW LEVEL SECURITY;
 
 -- Simple policies (for prototype, usually you'd restrict to authenticated admins)
 CREATE POLICY "Allow authenticated access to settings" ON public.settings
-    FOR ALL USING (auth.role() = 'authenticated');
-
-CREATE POLICY "Allow authenticated access to chat_logs" ON public.chat_logs
     FOR ALL USING (auth.role() = 'authenticated');
 
 CREATE POLICY "Allow authenticated access to user_states" ON public.user_states

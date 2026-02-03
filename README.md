@@ -8,7 +8,7 @@
 - **雙 AI 引擎**：支援最新的 GPT-5 (Responses API) 與 Gemini 3 (Thinking Level)。
 - **知識庫支援**：支援純文字與 PDF 檔案參考，AI 會根據資料內容進行回答。
 - **真人轉接機制**：自動偵測關鍵字，發送 LINE 通知給專員，並提供手動轉回 AI 的管理後台。
-- **對話記錄**：即時儲存與查看最近 100 筆對話，並自動顯示用戶暱稱。
+- **真人轉接機制**：自動偵測關鍵字，發送 LINE 通知給專員，並提供手動轉回 AI 的管理後台。
 
 ---
 
@@ -68,20 +68,7 @@ CREATE TABLE IF NOT EXISTS public.settings (
     agent_user_ids TEXT DEFAULT ''
 );
 
--- 2. 對話紀錄表
-CREATE TABLE IF NOT EXISTS public.chat_logs (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-    line_user_id TEXT NOT NULL,
-    webhook_event_id TEXT UNIQUE,
-    user_name TEXT,
-    message TEXT NOT NULL,
-    sender TEXT NOT NULL,
-    ai_type TEXT,
-    ai_response_id TEXT
-);
-
--- 3. 用戶狀態表
+-- 2. 用戶狀態表
 CREATE TABLE IF NOT EXISTS public.user_states (
     line_user_id TEXT PRIMARY KEY,
     nickname TEXT,
@@ -89,13 +76,11 @@ CREATE TABLE IF NOT EXISTS public.user_states (
     last_human_interaction TIMESTAMP WITH TIME ZONE
 );
 
--- 4. 啟用 RLS 與初始資料
+-- 3. 啟用 RLS 與初始資料
 ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.chat_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_states ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Allow Auth Access" ON public.settings FOR ALL USING (auth.role() = 'authenticated');
-CREATE POLICY "Allow Auth Access Logs" ON public.chat_logs FOR ALL USING (auth.role() = 'authenticated');
 CREATE POLICY "Allow Auth Access States" ON public.user_states FOR ALL USING (auth.role() = 'authenticated');
 
 INSERT INTO public.settings (id) SELECT gen_random_uuid() WHERE NOT EXISTS (SELECT 1 FROM public.settings);

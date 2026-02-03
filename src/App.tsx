@@ -35,7 +35,6 @@ function App() {
         <Route element={session ? <Layout /> : <Navigate to="/login" />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/agent" element={<AgentService />} />
-          <Route path="/logs" element={<ChatLogs />} />
         </Route>
       </Routes>
     </BrowserRouter>

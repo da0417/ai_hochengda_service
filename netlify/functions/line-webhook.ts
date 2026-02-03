@@ -32,20 +32,10 @@ export const handler: Handler = async (event) => {
     if (lineEvent.type === 'message' && lineEvent.message.type === 'text') {
       const userId = lineEvent.source.userId!;
       const userMessage = lineEvent.message.text;
-      const eventId = (lineEvent as any).webhookEventId;
 
-      const { data: existingLog } = await supabase.from('chat_logs').select('id').eq('webhook_event_id', eventId).single();
-      if (existingLog) continue;
-
-      const { error: userLogError } = await supabase.from('chat_logs').insert({
-        line_user_id: userId,
-        webhook_event_id: eventId,
-        message: userMessage,
-        sender: 'user',
-      });
-      if (userLogError) console.error('User Log Error:', userLogError);
-
+      // 檢查用戶狀態 (是否在真人模式)
       const { data: userState } = await supabase.from('user_states').select('*').eq('line_user_id', userId).single();
+      
       const handoverKeywords = settings.handover_keywords.split(',').map((k: string) => k.trim());
       const isKeywordHit = handoverKeywords.some((k: string) => userMessage.includes(k));
 
@@ -71,27 +61,18 @@ export const handler: Handler = async (event) => {
 
       if (!settings.is_ai_enabled) continue;
 
-      const { data: contextLogs } = await supabase.from('chat_logs').select('message, sender, ai_response_id').eq('line_user_id', userId).order('created_at', { ascending: false }).limit(5);
-      const history = contextLogs?.reverse() || [];
-
+      // 因為不儲存對話紀錄，這裡不再抓取 history
       let aiResult: { text: string, id?: string } = { text: '' };
       try {
-        if (settings.active_ai === 'gpt') aiResult = await callGPT(settings, history, userMessage);
-        else aiResult = { text: await callGemini(settings, history, userMessage) };
+        if (settings.active_ai === 'gpt') aiResult = await callGPT(settings, [], userMessage);
+        else aiResult = { text: await callGemini(settings, [], userMessage) };
       } catch (e: any) {
-        aiResult = { text: `❌ AI 錯誤：\n${e.message}` };
+        aiResult = { text: `❌ AI 錯誤：
+${e.message}` };
       }
 
       if (aiResult.text) {
         await lineClient.replyMessage(lineEvent.replyToken, { type: 'text', text: aiResult.text });
-        const { error: aiLogError } = await supabase.from('chat_logs').insert({
-          line_user_id: userId,
-          message: aiResult.text,
-          sender: 'ai',
-          ai_type: settings.active_ai,
-          ai_response_id: aiResult.id
-        });
-        if (aiLogError) console.error('AI Log Error:', aiLogError);
       }
     }
   }
@@ -107,14 +88,12 @@ async function callGPT(settings: any, history: any[], currentMessage: string) {
   const systemContent = `${settings.system_prompt}\n\n參考文字：\n${settings.reference_text}\n\n檔案內容：\n${fileContent}`;
 
   if (isGPT5) {
-    const last = [...history].reverse().find(h => h.sender === 'ai' && h.ai_response_id);
     const body: any = {
       model: settings.gpt_model_name,
       input: `System: ${systemContent}\nUser: ${currentMessage}`,
       reasoning: { effort: settings.gpt_reasoning_effort || 'none' },
       text: { verbosity: settings.gpt_verbosity || 'medium' }
     };
-    if (last) body.previous_response_id = last.ai_response_id;
     const res = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${settings.gpt_api_key}`, 'Content-Type': 'application/json' },
@@ -126,10 +105,7 @@ async function callGPT(settings: any, history: any[], currentMessage: string) {
   }
 
   const openai = new OpenAI({ apiKey: settings.gpt_api_key });
-  const messages: any[] = [{ role: 'system', content: systemContent }];
-  for (const h of history) messages.push({ role: h.sender === 'user' ? 'user' : 'assistant', content: h.message });
-  messages.push({ role: 'user', content: currentMessage });
-
+  const messages: any[] = [{ role: 'system', content: systemContent }, { role: 'user', content: currentMessage }];
   const params: any = { model: settings.gpt_model_name, messages };
   if (settings.gpt_model_name.startsWith('o1') || settings.gpt_model_name.startsWith('o3')) {
     params.max_completion_tokens = settings.gpt_max_tokens;
@@ -152,11 +128,10 @@ async function callGemini(settings: any, history: any[], currentMessage: string)
       }
     } catch (e) {}
   }
-  const contents = history.map(h => ({ role: h.sender === 'user' ? 'user' : 'model', parts: [{ text: h.message }] }));
   const userParts: any[] = [{ text: `System: ${settings.system_prompt}\nReference: ${settings.reference_text}` }];
   if (filePart) userParts.push(filePart);
   userParts.push({ text: `User: ${currentMessage}` });
-  contents.push({ role: 'user', parts: userParts });
+  const contents = [{ role: 'user', parts: userParts }];
 
   const generationConfig: any = { temperature: settings.gemini_temperature || 1.0, maxOutputTokens: settings.gemini_max_tokens };
   if (settings.gemini_model_name.includes('gemini-3')) {

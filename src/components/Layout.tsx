@@ -30,10 +30,6 @@ export default function Layout() {
             <UserCheck className="w-5 h-5" />
             專人客服
           </Link>
-          <Link to="/logs" className="flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors">
-            <MessageSquare className="w-5 h-5" />
-            對話記錄
-          </Link>
         </nav>
 
         <div className="p-4 border-t">
