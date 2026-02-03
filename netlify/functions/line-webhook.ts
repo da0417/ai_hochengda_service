@@ -78,15 +78,37 @@ export const handler: Handler = async (event) => {
       const isKeywordHit = handoverKeywords.some((k: string) => userMessage.includes(k));
 
       if (isKeywordHit) {
+        // Fetch User Profile for Nickname
+        let nickname = '匿名用戶';
+        try {
+          const profile = await lineClient.getProfile(userId);
+          nickname = profile.displayName;
+        } catch (e) { console.error('Get profile error:', e); }
+
         await supabase.from('user_states').upsert({
           line_user_id: userId,
+          nickname: nickname,
           is_human_mode: true,
           last_human_interaction: new Date().toISOString(),
         });
+
         await lineClient.replyMessage(lineEvent.replyToken, {
           type: 'text',
-          text: '已為您轉接真人客服，請稍候。',
+          text: `已為您轉接真人客服，請稍候。您的暱稱：${nickname}`,
         });
+
+        // Notify Agents
+        const agentIds = settings.agent_user_ids?.split(',').map((id: string) => id.trim()).filter(Boolean);
+        if (agentIds && agentIds.length > 0) {
+          for (const agentId of agentIds) {
+            try {
+              await lineClient.pushMessage(agentId, {
+                type: 'text',
+                text: `🔔 真人客服通知：\n用戶【${nickname}】(ID: ${userId}) 正在呼叫專人服務，請儘速處理。`
+              });
+            } catch (e) { console.error(`Notify agent ${agentId} error:`, e); }
+          }
+        }
         continue;
       }
 

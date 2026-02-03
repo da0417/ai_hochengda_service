@@ -369,7 +369,104 @@ export default function Dashboard() {
               className="w-full px-4 py-2 border rounded-lg"
             />
           </div>
+          <div className="col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">專人客服 LINE User ID (用半形逗號隔開)</label>
+            <input
+              type="text"
+              name="agent_user_ids"
+              value={settings.agent_user_ids}
+              onChange={handleChange}
+              placeholder="U123..., U456..."
+              className="w-full px-4 py-2 border rounded-lg"
+            />
+            <p className="text-xs text-gray-400 mt-1">當有人呼叫真人客服時，系統會發送 Push Message 通知這些 ID。</p>
+          </div>
         </div>
+      </div>
+
+      {/* Handover Management */}
+      <HandoverList />
+    </div>
+  );
+}
+
+function HandoverList() {
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchHandoverUsers();
+    const interval = setInterval(fetchHandoverUsers, 10000); // 每 10 秒刷新一次
+    return () => clearInterval(interval);
+  }, []);
+
+  const fetchHandoverUsers = async () => {
+    const { data, error } = await supabase
+      .from('user_states')
+      .select('*')
+      .eq('is_human_mode', true)
+      .order('last_human_interaction', { ascending: false });
+
+    if (!error) setUsers(data || []);
+    setLoading(false);
+  };
+
+  const switchToAI = async (userId: string) => {
+    const { error } = await supabase
+      .from('user_states')
+      .update({ is_human_mode: false })
+      .eq('line_user_id', userId);
+
+    if (!error) {
+      alert('已成功切換回 AI 客服');
+      fetchHandoverUsers();
+    }
+  };
+
+  if (loading) return null;
+
+  return (
+    <div className="bg-white p-8 rounded-xl shadow-sm border space-y-6">
+      <h3 className="text-lg font-bold border-b pb-4 flex items-center gap-2 text-red-600">
+        <Bot className="w-5 h-5" />
+        待處理真人請求 ({users.length})
+      </h3>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left">
+          <thead>
+            <tr className="text-sm font-semibold text-gray-600 border-b">
+              <th className="py-3 px-4">用戶暱稱</th>
+              <th className="py-3 px-4">LINE User ID</th>
+              <th className="py-3 px-4">呼叫時間</th>
+              <th className="py-3 px-4">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="py-8 text-center text-gray-500">目前沒有待處理的請求</td>
+              </tr>
+            ) : (
+              users.map(user => (
+                <tr key={user.line_user_id} className="border-b hover:bg-gray-50">
+                  <td className="py-3 px-4 font-medium">{user.nickname || '未取得'}</td>
+                  <td className="py-3 px-4 font-mono text-xs">{user.line_user_id}</td>
+                  <td className="py-3 px-4 text-sm text-gray-500">
+                    {new Date(user.last_human_interaction).toLocaleString('zh-TW')}
+                  </td>
+                  <td className="py-3 px-4">
+                    <button
+                      onClick={() => switchToAI(user.line_user_id)}
+                      className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-colors"
+                    >
+                      轉回 AI
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );

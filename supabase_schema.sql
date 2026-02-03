@@ -35,7 +35,8 @@ CREATE TABLE IF NOT EXISTS public.settings (
     
     -- Handover Settings
     handover_keywords TEXT DEFAULT '真人,客服,人工',
-    handover_timeout_minutes INTEGER DEFAULT 30
+    handover_timeout_minutes INTEGER DEFAULT 30,
+    agent_user_ids TEXT DEFAULT ''
 );
 
 -- Chat Logs table
@@ -54,6 +55,7 @@ CREATE TABLE IF NOT EXISTS public.chat_logs (
 -- User state table to track handover mode
 CREATE TABLE IF NOT EXISTS public.user_states (
     line_user_id TEXT PRIMARY KEY,
+    nickname TEXT,
     is_human_mode BOOLEAN DEFAULT false,
     last_human_interaction TIMESTAMP WITH TIME ZONE
 );
