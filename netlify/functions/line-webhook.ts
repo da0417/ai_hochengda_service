@@ -33,27 +33,24 @@ export const handler: Handler = async (event) => {
       const userId = lineEvent.source.userId!;
       const userMessage = lineEvent.message.text;
 
-      // 檢查用戶狀態 (是否在真人模式)
       const { data: userState } = await supabase.from('user_states').select('*').eq('line_user_id', userId).single();
       
-      // 修正：過濾掉空字串，確保不會因為空關鍵字而誤觸
       const handoverKeywords = settings.handover_keywords
-        ?.split(',')
+        ?.replace(/，/g, ',')
+        .split(',')
         .map((k: string) => k.trim())
         .filter((k: string) => k !== '') || [];
       
-      const isKeywordHit = handoverKeywords.some((k: string) => userMessage.includes(k));
+      const matchedKeyword = handoverKeywords.find((k: string) => userMessage.includes(k));
+      const isKeywordHit = !!matchedKeyword;
 
-      // 冷卻機制：如果 3 分鐘內才剛手動重設過，則忽略關鍵字偵測
       let isCooldown = false;
       if (userState?.last_ai_reset_at) {
         const lastReset = new Date(userState.last_ai_reset_at).getTime();
-        if (new Date().getTime() - lastReset < 3 * 60 * 1000) {
-          isCooldown = true;
-        }
+        if (new Date().getTime() - lastReset < 3 * 60 * 1000) isCooldown = true;
       }
 
-      if (handoverKeywords.length > 0 && isKeywordHit && !isCooldown) {
+      if (isKeywordHit && !isCooldown) {
         let nickname = '匿名用戶';
         try { const p = await lineClient.getProfile(userId); nickname = p.displayName; } catch (e) {}
         await supabase.from('user_states').upsert({ line_user_id: userId, nickname, is_human_mode: true, last_human_interaction: new Date().toISOString() });
@@ -61,7 +58,12 @@ export const handler: Handler = async (event) => {
         const agentIds = settings.agent_user_ids?.split(',').map((id: string) => id.trim()).filter(Boolean);
         if (agentIds) {
           for (const id of agentIds) {
-            try { await lineClient.pushMessage(id, { type: 'text', text: `🔔 真人通知：【${nickname}】正在呼叫專人。` }); } catch (e) {}
+            try { 
+              await lineClient.pushMessage(id, { 
+                type: 'text', 
+                text: `🔔 真人通知：【${nickname}】正在呼叫專人。\n觸發關鍵字：${matchedKeyword}` 
+              }); 
+            } catch (e) {}
           }
         }
         continue;
@@ -75,14 +77,12 @@ export const handler: Handler = async (event) => {
 
       if (!settings.is_ai_enabled) continue;
 
-      // 因為不儲存對話紀錄，這裡不再抓取 history
       let aiResult: { text: string, id?: string } = { text: '' };
       try {
         if (settings.active_ai === 'gpt') aiResult = await callGPT(settings, [], userMessage);
         else aiResult = { text: await callGemini(settings, [], userMessage) };
       } catch (e: any) {
-        aiResult = { text: `❌ AI 錯誤：
-${e.message}` };
+        aiResult = { text: `❌ AI 錯誤：\n${e.message}` };
       }
 
       if (aiResult.text) {
