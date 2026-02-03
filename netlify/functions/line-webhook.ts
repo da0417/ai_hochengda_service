@@ -30,46 +30,49 @@ export const handler: Handler = async (event) => {
   for (const lineEvent of events) {
     if (lineEvent.type === 'message' && lineEvent.message.type === 'text') {
       const userId = lineEvent.source.userId!;
-      const userMessage = lineEvent.message.text.trim();
+      const userMessage = (lineEvent.message.text || '').trim();
       const eventId = (lineEvent as any).webhookEventId;
 
-      // 1. 去重機制 (關鍵)：利用 user_states 表的備註欄位或專用欄位紀錄最後處理的 Event ID
-      // 避免 AI 運算太久導致 LINE 重複發送請求
+      if (!userMessage) continue;
+
+      // 1. 嚴格去重機制
       const { data: userState } = await supabase.from('user_states').select('*').eq('line_user_id', userId).single();
-      
       if (userState?.last_event_id === eventId) {
-        console.log('Duplicate event detected, skipping.');
+        console.log(`[Skip] Duplicate event: ${eventId}`);
         continue; 
       }
 
-      // 更新最後處理的 Event ID
-      await supabase.from('user_states').upsert({ 
-        line_user_id: userId, 
-        last_event_id: eventId 
-      });
-
-      // 2. 關鍵字偵測
+      // 2. 關鍵字偵測邏輯優化
       const handoverKeywords = settings.handover_keywords
         ?.replace(/，/g, ',')
         .split(',')
         .map((k: string) => k.trim())
         .filter((k: string) => k.length > 0) || [];
       
-      // 改用更精確的匹配：如果訊息完全等於關鍵字，或包含在內（但排除極短訊息誤觸）
       const matchedKeyword = handoverKeywords.find((k: string) => {
-        if (k.length === 1) return userMessage === k; // 單個字必須完全相同
+        if (k.length === 1) return userMessage === k; 
         return userMessage.includes(k);
       });
 
+      // 3. 處理狀態更新 (關鍵：合併更新以防止 ID 遺失)
+      const now = new Date().toISOString();
+      const updatePayload: any = { 
+        line_user_id: userId, 
+        last_event_id: eventId 
+      };
+
       if (matchedKeyword) {
-        let nickname = '匿名用戶';
+        console.log(`[Handover] User: ${userId}, Msg: "${userMessage}", Keyword: "${matchedKeyword}"`);
+        
+        let nickname = userState?.nickname || '匿名用戶';
         try { const p = await lineClient.getProfile(userId); nickname = p.displayName; } catch (e) {}
         
-        await supabase.from('user_states').upsert({ 
-          line_user_id: userId, 
-          nickname, 
-          is_human_mode: true, 
-          last_human_interaction: new Date().toISOString() 
+        // 進入真人模式
+        await supabase.from('user_states').upsert({
+          ...updatePayload,
+          nickname,
+          is_human_mode: true,
+          last_human_interaction: now 
         });
 
         await lineClient.replyMessage(lineEvent.replyToken, { type: 'text', text: '已為您轉接真人客服，請稍候。' });
@@ -83,27 +86,28 @@ export const handler: Handler = async (event) => {
         continue;
       }
 
-      // 3. 檢查目前是否在真人模式
+      // 4. 檢查真人模式狀態
       if (userState?.is_human_mode) {
-        const last = new Date(userState.last_human_interaction).getTime();
-        const timeoutMs = settings.handover_timeout_minutes * 60 * 1000;
-        if (new Date().getTime() - last < timeoutMs) {
-          continue; // 還在真人模式且未超時，不回覆
+        const lastInteraction = new Date(userState.last_human_interaction).getTime();
+        const timeoutMs = (settings.handover_timeout_minutes || 30) * 60 * 1000;
+        
+        if (new Date().getTime() - lastInteraction < timeoutMs) {
+          // 還在有效真人時間內，僅更新 Event ID 以防止重試，但不回覆
+          await supabase.from('user_states').upsert(updatePayload);
+          continue; 
         }
-        // 超時了，自動切回 AI
-        await supabase.from('user_states').update({ is_human_mode: false }).eq('line_user_id', userId);
+        // 已超時，準備由 AI 接手
       }
 
-      // 4. 呼叫 AI (不存紀錄，不傳歷史)
+      // 5. 呼叫 AI 前先更新 Event ID
+      await supabase.from('user_states').upsert({ ...updatePayload, is_human_mode: false });
+
       if (!settings.is_ai_enabled) continue;
 
       let aiResult = '';
       try {
-        if (settings.active_ai === 'gpt') {
-          aiResult = (await callGPT(settings, userMessage)).text;
-        } else {
-          aiResult = await callGemini(settings, userMessage);
-        }
+        if (settings.active_ai === 'gpt') aiResult = (await callGPT(settings, userMessage)).text;
+        else aiResult = await callGemini(settings, userMessage);
       } catch (e: any) {
         aiResult = `❌ AI 錯誤：\n${e.message}`;
       }
@@ -144,14 +148,12 @@ async function callGPT(settings: any, currentMessage: string) {
   const openai = new OpenAI({ apiKey: settings.gpt_api_key });
   const messages: any[] = [{ role: 'system', content: systemContent }, { role: 'user', content: currentMessage }];
   const params: any = { model: settings.gpt_model_name, messages };
-  
   if (settings.gpt_model_name.startsWith('o1') || settings.gpt_model_name.startsWith('o3')) {
     params.max_completion_tokens = settings.gpt_max_tokens;
   } else {
     params.max_tokens = settings.gpt_max_tokens;
     params.temperature = settings.gpt_temperature;
   }
-  
   const completion = await openai.chat.completions.create(params);
   return { text: completion.choices[0].message.content || '' };
 }
@@ -171,16 +173,10 @@ async function callGemini(settings: any, currentMessage: string) {
   if (filePart) userParts.push(filePart);
   userParts.push({ text: `User: ${currentMessage}` });
   const contents = [{ role: 'user', parts: userParts }];
-
-  const generationConfig: any = { temperature: 1.0, maxOutputTokens: settings.gemini_max_tokens };
-  if (settings.gemini_model_name.includes('gemini-3')) {
-    generationConfig.thinking_config = { include_thoughts: true, thinking_level: settings.gemini_thinking_level || 'high' };
-  }
-
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${settings.gemini_model_name}:generateContent?key=${settings.gemini_api_key}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ contents, generationConfig })
+    body: JSON.stringify({ contents, generationConfig: { temperature: 1.0, maxOutputTokens: settings.gemini_max_tokens } })
   });
   const result: any = await res.json();
   if (!res.ok || result.error) throw new Error(result.error?.message || 'Gemini API Error');
