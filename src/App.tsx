@@ -4,6 +4,7 @@ import { supabase } from './lib/supabase';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import AgentService from './pages/AgentService';
+import UserList from './pages/UserList';
 import Layout from './components/Layout';
 
 function App() {
@@ -14,11 +15,9 @@ function App() {
   useEffect(() => {
     async function initSession() {
       try {
-        // 檢查是否有無效的 placeholder 設定
         if (import.meta.env.VITE_SUPABASE_URL?.includes('placeholder') || !import.meta.env.VITE_SUPABASE_URL) {
           throw new Error('環境變數尚未設定');
         }
-
         const { data: { session }, error } = await supabase.auth.getSession();
         if (error) throw error;
         setSession(session);
@@ -29,13 +28,10 @@ function App() {
         setLoading(false);
       }
     }
-
     initSession();
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
     });
-
     return () => subscription.unsubscribe();
   }, []);
 
@@ -60,8 +56,8 @@ function App() {
           <div className="bg-gray-50 p-4 rounded-lg text-left text-xs font-mono text-gray-500 break-all mb-6">
             網址: {window.location.origin}
           </div>
-          <button 
-            onClick={() => window.location.reload()} 
+          <button
+            onClick={() => window.location.reload()}
             className="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
           >
             重新整理頁面
@@ -78,6 +74,7 @@ function App() {
         <Route element={session ? <Layout /> : <Navigate to="/login" />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/agent" element={<AgentService />} />
+          <Route path="/users" element={<UserList />} />
         </Route>
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
